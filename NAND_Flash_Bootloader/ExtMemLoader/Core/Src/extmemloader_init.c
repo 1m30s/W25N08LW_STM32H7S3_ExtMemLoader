@@ -139,7 +139,7 @@ uint32_t extmemloader_Init()
 
   /* USER CODE BEGIN 2 */
 
-  printf("ExtMemLoader Run(2)\n");
+  printf("ExtMemLoader Run \n");
 
   /* USER CODE END 2 */
 

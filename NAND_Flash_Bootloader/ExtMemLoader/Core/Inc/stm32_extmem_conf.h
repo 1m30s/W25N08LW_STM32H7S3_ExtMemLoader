@@ -35,7 +35,8 @@
 #define EXTMEM_DRIVER_NOR_SFDP   0
 #define EXTMEM_DRIVER_PSRAM      0
 #define EXTMEM_DRIVER_SDCARD     0
-#define EXTMEM_DRIVER_USER       1
+#define EXTMEM_DRIVER_USER       0
+#define EXTMEM_DRIVER_CUSTOM     1
 
 /*
   @brief management of the sal layer enable
@@ -53,6 +54,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include "W25N08_Driver.h"
+#include "W959D8NF_Extmem_Driver.h"
 
 /* USER CODE END INCLUDE */
 /* Private variables ---------------------------------------------------------*/

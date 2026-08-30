@@ -29,6 +29,8 @@
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 
+extern XSPI_HandleTypeDef hxspi1;
+extern XSPI_HandleTypeDef hxspi2;
 /* USER CODE END PV */
 
 /* USER CODE BEGIN PFP */
@@ -58,6 +60,7 @@ void MX_EXTMEM_MANAGER_Init(void)
 {
 
   /* USER CODE BEGIN MX_EXTMEM_Init_PreTreatment */
+#if(0)
 
   /* USER CODE END MX_EXTMEM_Init_PreTreatment */
 
@@ -70,6 +73,16 @@ void MX_EXTMEM_MANAGER_Init(void)
   EXTMEM_Init(EXTMEMORY_2, 0);
 
   /* USER CODE BEGIN MX_EXTMEM_Init_PostTreatment */
+
+#endif
+  /* Initialization of the memory parameters */
+  memset(extmem_list_config, 0x0, sizeof(extmem_list_config));
+
+  extmem_list_config[0].MemType = EXTMEM_CUSTOM;
+  extmem_list_config[0].Handle = &hxspi1;
+//  extmem_list_config[0].CustomObject = extmem_w958d6nb; // 16bit hyperram
+  extmem_list_config[0].CustomObject = extmem_W959D8NF;
+  EXTMEM_Init(EXTMEMORY_1, 400000000); // XSPI Clock = 400MHz (Note: clock must be specified for custom driver!!)
 
   /* USER CODE END MX_EXTMEM_Init_PostTreatment */
 }
