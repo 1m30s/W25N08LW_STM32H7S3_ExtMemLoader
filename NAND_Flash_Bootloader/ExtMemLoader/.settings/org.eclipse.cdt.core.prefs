@@ -1,0 +1,16 @@
+doxygen/doxygen_new_line_after_brief=true
+doxygen/doxygen_use_brief_tag=false
+doxygen/doxygen_use_javadoc_tags=true
+doxygen/doxygen_use_pre_tag=false
+doxygen/doxygen_use_structural_commands=false
+eclipse.preferences.version=1
+environment/project/com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.544130652/STM32_PRG_PATH/delimiter=;
+environment/project/com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.544130652/STM32_PRG_PATH/operation=replace
+environment/project/com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.544130652/STM32_PRG_PATH/value=C\:\\Program Files\\STMicroelectronics\\STM32Cube\\STM32CubeProgrammer\\bin
+environment/project/com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.544130652/append=true
+environment/project/com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.544130652/appendContributed=true
+environment/project/com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.2110491222/STM32_PRG_PATH/delimiter=;
+environment/project/com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.2110491222/STM32_PRG_PATH/operation=append
+environment/project/com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.2110491222/STM32_PRG_PATH/value=C\:\\Program Files\\STMicroelectronics\\STM32Cube\\STM32CubeProgrammer\\bin
+environment/project/com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.2110491222/append=true
+environment/project/com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.release.2110491222/appendContributed=true
