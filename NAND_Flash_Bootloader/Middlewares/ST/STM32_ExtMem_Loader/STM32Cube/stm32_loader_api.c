@@ -274,7 +274,6 @@ int main(void)
  */
 uint32_t Init(void)
 {
-
   uint32_t retr = 1;
   uint8_t *startadd;
   uint32_t size;
@@ -302,14 +301,12 @@ uint32_t Init(void)
   extmemloader_Init();
 
   /* Enable default memory mapped mode */
-  //if (memory_mapmode(MEM_MAPENABLE)  != MEM_OK)
-  //{
-  //  retr = 0;
-  //}
-  //MemoryMappedMode = MEM_MAPENABLE;
+  if (memory_mapmode(MEM_MAPENABLE)  != MEM_OK)
+  {
+    retr = 0;
+  }
 
-	// -> Do not use memory mapped mode
-
+  MemoryMappedMode = MEM_MAPENABLE;
 
   return retr;
 }
@@ -351,6 +348,7 @@ KeepInCompilation uint32_t Read(uint32_t Address, uint32_t Size, uint8_t *Buffer
 
 	return 1;
 }
+
 /**
  * @brief 	 Full erase of the device
  * @param 	 Parallelism : 0

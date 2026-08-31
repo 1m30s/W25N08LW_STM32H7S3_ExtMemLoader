@@ -35,8 +35,7 @@
 #define EXTMEM_DRIVER_NOR_SFDP   0
 #define EXTMEM_DRIVER_PSRAM      0
 #define EXTMEM_DRIVER_SDCARD     0
-#define EXTMEM_DRIVER_USER       0
-#define EXTMEM_DRIVER_CUSTOM     1
+#define EXTMEM_DRIVER_CUSTOM       1
 
 /*
   @brief management of the sal layer enable
@@ -69,7 +68,7 @@
   */
 enum {
   EXTMEMORY_1  = 0, /*!< ID=0 for the first memory  */
-  EXTMEMORY_2  = 1 // USER ADD
+  EXTMEMORY_2  = 1
 };
 
 /*

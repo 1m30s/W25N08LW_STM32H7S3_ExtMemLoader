@@ -135,7 +135,7 @@ uint32_t extmemloader_Init()
 
   MX_USART3_UART_Init();
 
-  //MX_EXTMEM_MANAGER_Init();
+  MX_EXTMEM_MANAGER_Init();
 
   /* USER CODE BEGIN 2 */
 
