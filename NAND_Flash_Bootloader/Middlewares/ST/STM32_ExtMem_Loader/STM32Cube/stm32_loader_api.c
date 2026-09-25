@@ -308,6 +308,67 @@ uint32_t Init(void)
 
   MemoryMappedMode = MEM_MAPENABLE;
 
+  if(1)
+  {
+	#define NAND_REG_PROTECTION         0xA0  // Status Register-1 (Protection)
+	#define NAND_REG_CONFIG             0xB0  // Status Register-2 (Configuration)
+	#define NAND_REG_STATUS_3           0xC0  // Status Register-3 (Status)
+	uint8_t rx_buf[4] = {0};
+
+	if (NAND_ReadRegister(NAND_REG_PROTECTION, rx_buf) == HAL_OK)
+	{
+		char buf[64];
+		sprintf(buf, "Read Register[0x%02X]: 0x%02X\r\n", NAND_REG_PROTECTION, rx_buf[0]);
+		STM32_EXTMEMLOADER_TRACE(buf);
+	}
+	else
+	{
+		STM32_EXTMEMLOADER_TRACE("Error: NAND_ReadRegister() Failed.\n");
+	}
+	if (NAND_ReadRegister(NAND_REG_CONFIG, rx_buf) == HAL_OK)
+	{
+		char buf[64];
+		sprintf(buf, "Read Register[0x%02X]: 0x%02X\r\n", NAND_REG_CONFIG, rx_buf[0]);
+		STM32_EXTMEMLOADER_TRACE(buf);
+	}
+	else
+	{
+		STM32_EXTMEMLOADER_TRACE("Error: NAND_ReadRegister() Failed.\n");
+	}
+  }
+
+	// Load memory from NAND Flash
+	// (Extmem manager has already initialized)
+
+  // How long it takes? for example, when data rate is 100MHz x 4bit (QSPI), to read 64MB it takes
+  // 64MB / 50MB/s = 1.3 sec
+
+	uint32_t i;
+	//static uint8_t buf[STM32EXTLOADER_DEVICE_PAGE_SIZE]; // data buffer
+	for(i=0; i<STM32EXTLOADER_DEVICE_SIZE/STM32EXTLOADER_DEVICE_PAGE_SIZE; i+=1)
+	{
+		uint8_t* addr = (uint8_t*) (STM32EXTLOADER_DEVICE_ADDR + i * STM32EXTLOADER_DEVICE_PAGE_SIZE);
+		if(NAND_ReadPage(i, 0, addr, STM32EXTLOADER_DEVICE_PAGE_SIZE) != HAL_OK) break; // Write directly to PSRAM
+
+		if(i % 256 == 0) {
+			char buf[64];
+			sprintf(buf, "Read 0x%02X\r\n", addr);
+			STM32_EXTMEMLOADER_TRACE(buf);
+		}
+
+
+		// Use buffer
+		//if(NAND_ReadPage(i, 0, buf, STM32EXTLOADER_DEVICE_PAGE_SIZE) != HAL_OK) break;
+		//uint32_t j;
+		//for(j=0; j<STM32EXTLOADER_DEVICE_PAGE_SIZE; j++) addr[j] = buf[j];
+
+		//uint32_t j;
+		//for(j=0; j<STM32EXTLOADER_DEVICE_PAGE_SIZE; j++) addr[j] = ~j;
+
+		//break;
+	}
+
+
   return retr;
 }
 
@@ -321,22 +382,36 @@ uint32_t Init(void)
  */
 KeepInCompilation uint32_t Write(uint32_t Address, uint32_t Size, uint8_t *buffer)
 {
-  STM32_EXTMEMLOADER_TRACE("\n\nCall Function Write\n");
+	char buf[128];
+	sprintf(buf, "Call Function Write(%Xh,%d,%Xh)\n", Address, Size, (uint32_t)buffer);
+	STM32_EXTMEMLOADER_TRACE(buf);
+  //STM32_EXTMEMLOADER_TRACE("\n\nCall Function Write\n");
 
   /* Disable memory mapped mode if enabled */
-  if (MemoryMappedMode == MEM_MAPENABLE)
-  {
-    if (memory_mapmode(MEM_MAPDISABLE)  != MEM_OK)
-    {
-      return 0;
-    }
-    MemoryMappedMode = MEM_MAPDISABLE;
-  }
+//  if (MemoryMappedMode == MEM_MAPENABLE)
+//  {
+//    if (memory_mapmode(MEM_MAPDISABLE)  != MEM_OK)
+//    {
+//      return 0;
+//    }
+//    MemoryMappedMode = MEM_MAPDISABLE;
+//  }
+//
+//  if (memory_write(Address, Size, buffer) != MEM_OK)
+//  {
+//    return 0;
+//  }
 
-  if (memory_write(Address, Size, buffer) != MEM_OK)
-  {
-    return 0;
-  }
+	// 1. Write PSRAM
+	uint32_t i;
+	uint32_t* buffer32 = (uint32_t*) buffer;
+	for(i=0; i<Size; i+=4)
+	{
+		uint32_t* p = (uint32_t*) (Address + i);
+		*p = buffer32[i/4];
+	}
+
+	// 2. Write NAND Flash
 
   return 1;
 }
@@ -359,19 +434,19 @@ KeepInCompilation uint32_t MassErase(uint32_t Parallelism)
 {
   STM32_EXTMEMLOADER_TRACE("\n\nCall Function MassErase\n");
   /* Disable memory mapped mode if enabled */
-  if (MemoryMappedMode == MEM_MAPENABLE)
-  {
-    if (memory_mapmode(MEM_MAPDISABLE)  != MEM_OK)
-    {
-      return 0;
-    }
-    MemoryMappedMode = MEM_MAPDISABLE;
-  }
-
-  if (memory_masserase() != MEM_OK)
-  {
-    return 0;
-  }
+//  if (MemoryMappedMode == MEM_MAPENABLE)
+//  {
+//    if (memory_mapmode(MEM_MAPDISABLE)  != MEM_OK)
+//    {
+//      return 0;
+//    }
+//    MemoryMappedMode = MEM_MAPDISABLE;
+//  }
+//
+//  if (memory_masserase() != MEM_OK)
+//  {
+//    return 0;
+//  }
 
   return 1;
 }
@@ -384,20 +459,40 @@ KeepInCompilation uint32_t MassErase(uint32_t Parallelism)
  */
 KeepInCompilation uint32_t SectorErase(uint32_t EraseStartAddress, uint32_t EraseEndAddress)
 {
-  STM32_EXTMEMLOADER_TRACE("\n\nCall Function SectorErase\n");
+	char buf[128];
+	sprintf(buf, "\n\nCall Function SectorErase(%X,%X)\n", EraseStartAddress, EraseEndAddress);
+	STM32_EXTMEMLOADER_TRACE(buf);
   /* Disable memory mapped mode if enabled */
-  if (MemoryMappedMode == MEM_MAPENABLE)
+//  if (MemoryMappedMode == MEM_MAPENABLE)
+//  {
+//    if (memory_mapmode(MEM_MAPDISABLE)  != MEM_OK)
+//    {
+//      return 0;
+//    }
+//    MemoryMappedMode = MEM_MAPDISABLE;
+//  }
+//
+//  if (memory_sectorerase(EraseStartAddress, EraseEndAddress, STM32EXTLOADER_DEVICE_SECTOR_SIZE) != MEM_OK)
+//  {
+//    return 0;
+//  }
+
+	// Note that EndAddress could be same to StartAddress
+
+  // 1. Clear PSRAM contents
+  uint32_t i;
+  for(i=EraseStartAddress; i<=EraseEndAddress; i+=4)
   {
-    if (memory_mapmode(MEM_MAPDISABLE)  != MEM_OK)
-    {
-      return 0;
-    }
-    MemoryMappedMode = MEM_MAPDISABLE;
+	  uint32_t* p = (uint32_t*)i;
+	  *p = (STM32EXTLOADER_DEVICE_INITIAL_CONTENT) |
+			  (STM32EXTLOADER_DEVICE_INITIAL_CONTENT << 8) |
+			  (STM32EXTLOADER_DEVICE_INITIAL_CONTENT << 16) |
+			  (STM32EXTLOADER_DEVICE_INITIAL_CONTENT << 24);
   }
 
-  if (memory_sectorerase(EraseStartAddress, EraseEndAddress, STM32EXTLOADER_DEVICE_SECTOR_SIZE) != MEM_OK)
+  // 2. Erase NAND Flash
+  for(i=EraseStartAddress; i<=EraseEndAddress; i+=STM32EXTLOADER_DEVICE_SECTOR_SIZE)
   {
-    return 0;
   }
 
   return 1;
@@ -428,14 +523,14 @@ KeepInCompilation uint64_t Verify (uint32_t MemoryAddr, uint32_t RAMBufferAddr, 
   STM32_EXTMEMLOADER_TRACE("\n\nCall Function Verify\n");
 
   /* Enable memory mapped mode if disabled */
-  if (MemoryMappedMode == MEM_MAPDISABLE)
-  {
-    if (memory_mapmode(MEM_MAPENABLE) != MEM_OK)
-    {
-      return 0;
-    }
-    MemoryMappedMode = MEM_MAPENABLE;
-  }
+//  if (MemoryMappedMode == MEM_MAPDISABLE)
+//  {
+//    if (memory_mapmode(MEM_MAPENABLE) != MEM_OK)
+//    {
+//      return 0;
+//    }
+//    MemoryMappedMode = MEM_MAPENABLE;
+//  }
 
   checksum = CheckSum(memory_addr + (Missalignement & 0xFU), size - ((Missalignement >> 16U) & 0xFU), init_val);
   while (size>verified_data)

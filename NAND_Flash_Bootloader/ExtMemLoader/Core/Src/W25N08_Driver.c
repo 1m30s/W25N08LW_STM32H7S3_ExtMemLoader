@@ -5,15 +5,22 @@
  *      Author: Hiroyuki Yamada (Y-Logic)
  */
 
-#include "main.h"
 #include "extmem_manager.h"
 #include "W25N08_Driver.h"
+#include <string.h>
 
+///////////////////////////////////////////////////////////////////
+// Macro and variables
+///////////////////////////////////////////////////////////////////
 
 extern XSPI_HandleTypeDef hxspi2;
+static uint8_t g_isContinuousMode = 0;
+static volatile uint8_t g_isTransactionBusy = 0;
 
 #define NAND_CMD_PAGE_READ          0x13
-#define NAND_CMD_READ_BUFFER_QUAD   0xEB
+#define NAND_CMD_READ_BUFFER        0x0B
+#define NAND_CMD_READ_BUFFER_QUAD_OUTPUT  0x6B // 1-1-4
+#define NAND_CMD_READ_BUFFER_QUAD_IO      0xEB // 1-4-4
 #define NAND_CMD_READ_STATUS_REG    0x0F
 
 // Winbond W25N08LW コマンド定義
@@ -26,12 +33,54 @@ extern XSPI_HandleTypeDef hxspi2;
 #define NAND_REG_CONFIG             0xB0  // Status Register-2 (Configuration)
 #define NAND_REG_STATUS_3           0xC0  // Status Register-3 (Status)
 
+///////////////////////////////////////////////////////////////////
+// XSPI Status Handling
+///////////////////////////////////////////////////////////////////
+
+#if NAND_ACCESS_MODE_DMA || NAND_ACCESS_MODE_INTERRUPT
+void HAL_XSPI_CmdCpltCallback(XSPI_HandleTypeDef *hxspi)
+{
+	if(hxspi == &hxspi2) g_isTransactionBusy = 0;
+}
+void HAL_XSPI_TxCpltCallback(XSPI_HandleTypeDef *hxspi)
+{
+	if(hxspi == &hxspi2) g_isTransactionBusy = 0;
+}
+void HAL_XSPI_RxCpltCallback(XSPI_HandleTypeDef *hxspi)
+{
+	if(hxspi == &hxspi2) g_isTransactionBusy = 0;
+}
+void HAL_XSPI_ErrorCallback(XSPI_HandleTypeDef *hxspi)
+{
+	if(hxspi == &hxspi2) g_isTransactionBusy = 0;
+}
+
+
+#endif
+
+static int NAND_XSPI_WaitForComplete()
+{
+#if NAND_ACCESS_MODE_DMA || NAND_ACCESS_MODE_INTERRUPT
+	if(g_isTransactionBusy == 0) return 0;
+
+	uint32_t timeout = HAL_GetTick() + 10000;
+	while(HAL_GetTick() < timeout) // timeout after 10 seconds
+	{
+		if(g_isTransactionBusy == 0) return 0;
+	}
+	return -1;
+#else
+	return 0;
+#endif
+}
+///////////////////////////////////////////////////////////////////
+// Driver Functions
+///////////////////////////////////////////////////////////////////
 
 // NAND Flash Register 読み出し
 HAL_StatusTypeDef NAND_ReadRegister(uint8_t reg_addr, uint8_t* reg_val)
 {
-	XSPI_RegularCmdTypeDef sCommand =
-	{ 0 };
+	XSPI_RegularCmdTypeDef sCommand = 	{ 0 };
 	sCommand.Instruction = NAND_CMD_READ_STATUS_REG;
 	sCommand.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
 	sCommand.Address = reg_addr;
@@ -40,6 +89,7 @@ HAL_StatusTypeDef NAND_ReadRegister(uint8_t reg_addr, uint8_t* reg_val)
 	sCommand.DataMode = HAL_XSPI_DATA_1_LINE;
 	sCommand.DataLength = 1;
 
+	if(NAND_XSPI_WaitForComplete() < 0) return HAL_ERROR; // timed out
 	if (HAL_XSPI_Command(&hxspi2, &sCommand, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) == HAL_OK)
 	{
 		return HAL_XSPI_Receive(&hxspi2, reg_val, HAL_XSPI_TIMEOUT_DEFAULT_VALUE);
@@ -60,6 +110,7 @@ HAL_StatusTypeDef NAND_WriteRegister(uint8_t reg_addr, uint8_t reg_val)
     sCommand.DataMode        = HAL_XSPI_DATA_1_LINE;
     sCommand.DataLength      = 1;                          // 1 バイト書き込み
 
+	if(NAND_XSPI_WaitForComplete() < 0) return HAL_ERROR; // timed out
     if (HAL_XSPI_Command(&hxspi2, &sCommand, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
     {
         return HAL_ERROR;
@@ -78,6 +129,7 @@ HAL_StatusTypeDef NAND_WriteEnable(void)
     sCommand.AddressMode     = HAL_XSPI_ADDRESS_NONE;      // アドレスなし
     sCommand.DataMode        = HAL_XSPI_DATA_NONE;         // データ転送なし
 
+	if(NAND_XSPI_WaitForComplete() < 0) return HAL_ERROR; // timed out
     return HAL_XSPI_Command(&hxspi2, &sCommand, HAL_XSPI_TIMEOUT_DEFAULT_VALUE);
 }
 
@@ -106,13 +158,69 @@ static HAL_StatusTypeDef NAND_Command(uint8_t cmd, uint32_t page_addr)
 	sCommand.AddressWidth = HAL_XSPI_ADDRESS_24_BITS;
 	sCommand.DataMode = HAL_XSPI_DATA_NONE;
 
+	if(NAND_XSPI_WaitForComplete() < 0) return HAL_ERROR; // timed out
 	if (HAL_XSPI_Command(&hxspi2, &sCommand, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) return HAL_ERROR;
 
+	return HAL_OK;
+}
+
+static HAL_StatusTypeDef NAND_RunReceive(XSPI_RegularCmdTypeDef* pCommand, uint8_t *pData)
+{
+
+#if NAND_ACCESS_MODE_DMA
+	if(NAND_XSPI_WaitForComplete() < 0) return HAL_ERROR; // timed out
+	if (HAL_XSPI_Command(&hxspi2, pCommand, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) return HAL_ERROR;
+
+	g_isTransactionBusy = 1;
+	if(HAL_XSPI_Receive_DMA(&hxspi2, pData) != HAL_OK) return HAL_ERROR;
+	if(NAND_XSPI_WaitForComplete() < 0) return HAL_ERROR; // wait for complete
+
+	return HAL_OK;
+#elif NAND_ACCESS_MODE_INTERRUPT
+
+	if (HAL_XSPI_Command(&hxspi2, pCommand, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) return HAL_ERROR;
+//printf("NAND_RunReceive(%d)\n", pCommand->DataLength);
+	g_isTransactionBusy = 1;
+	if( HAL_XSPI_Receive_IT(&hxspi2, pData) != HAL_OK) return HAL_ERROR;
+	if(NAND_XSPI_WaitForComplete() < 0) return HAL_ERROR; // wait for complete
+
+	return HAL_OK;
+#else
+	if (HAL_XSPI_Command(&hxspi2, pCommand, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) return HAL_ERROR;
+	return HAL_XSPI_Receive(&hxspi2, pData, HAL_XSPI_TIMEOUT_DEFAULT_VALUE);
+#endif
+}
+
+// ページリード（Page Address からデータバッファを経由して RAM へ転送）
+// Fast Read Quad IO (0xEB)
+HAL_StatusTypeDef NAND_ReadPage(uint32_t page_addr, uint16_t column_addr, uint8_t *pData, uint32_t size)
+{
+	XSPI_RegularCmdTypeDef sCommand ={ 0 };
+
+	// Step 1: Page Data Read (0x13) - セルからバッファへ転送
+	if (NAND_Command(NAND_CMD_PAGE_READ, page_addr) != HAL_OK) return HAL_ERROR;
+
+	// Step 2: BUSY 完了待ち
+	if (NAND_WaitBusy() != HAL_OK) return HAL_ERROR;
+
+	// Step 3: Fast Read Quad I/O (0xEB) - バッファから MCU へデータ読み出し
+	// 0xEB is 1-4-4
+	memset(&sCommand, 0, sizeof(sCommand));
+	sCommand.Instruction = NAND_CMD_READ_BUFFER_QUAD_IO; // 0xEB:
+	sCommand.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
+	sCommand.Address = column_addr;
+	sCommand.AddressMode = HAL_XSPI_ADDRESS_4_LINES;
+	sCommand.AddressWidth = HAL_XSPI_ADDRESS_16_BITS;
+	sCommand.DummyCycles = (g_isContinuousMode)? 8: 4; // 4 dummy cycles. for non-buffer mode it requires 12 cycles incl. address.
+	sCommand.DataMode = HAL_XSPI_DATA_4_LINES;
+	sCommand.DataLength = size;
+
+	return NAND_RunReceive(&sCommand, pData);
 }
 
 
-// ページリード（Page Address からデータバッファを経由して RAM へ転送）
-HAL_StatusTypeDef NAND_ReadPage(uint32_t page_addr, uint16_t column_addr, uint8_t *pData, uint32_t size)
+// Fast Read (0x0B) version
+HAL_StatusTypeDef NAND_ReadPage_SingleIO(uint32_t page_addr, uint16_t column_addr, uint8_t *pData, uint32_t size)
 {
 	XSPI_RegularCmdTypeDef sCommand ={ 0 };
 
@@ -122,39 +230,90 @@ HAL_StatusTypeDef NAND_ReadPage(uint32_t page_addr, uint16_t column_addr, uint8_
 	// Step 2: BUSY 完了待ち
 	if (NAND_WaitBusy() != HAL_OK) return HAL_ERROR;
 
-	// Step 3: Fast Read Quad I/O (0xEB) - バッファから MCU へデータ読み出し
+	// Step 3: Fast Read (0x0B) - バッファから MCU へデータ読み出し
 	// 0xEB is 1-4-4
 	memset(&sCommand, 0, sizeof(sCommand));
-	sCommand.Instruction = NAND_CMD_READ_BUFFER_QUAD; // 0xEB:
+	sCommand.Instruction = NAND_CMD_READ_BUFFER; // 0x0B
 	sCommand.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
 	sCommand.Address = column_addr;
-	sCommand.AddressMode = HAL_XSPI_ADDRESS_4_LINES;
+	sCommand.AddressMode = HAL_XSPI_ADDRESS_1_LINE;
 	sCommand.AddressWidth = HAL_XSPI_ADDRESS_16_BITS;
-	sCommand.DummyCycles = 4; // 4 dummy cycles. for non-buffer mode it requires 12 cycles.
+	sCommand.DummyCycles = (g_isContinuousMode)? 16: 8; // 8 dummy cycles. for non-buffer mode it requires 32 cycles.
+	sCommand.DataMode = HAL_XSPI_DATA_1_LINE;
+	sCommand.DataLength = size;
+
+	return NAND_RunReceive(&sCommand, pData);
+}
+
+// Fast Read Quad Out (0x6B) version
+HAL_StatusTypeDef NAND_ReadPage_QuadOutput(uint32_t page_addr, uint16_t column_addr, uint8_t *pData, uint32_t size)
+{
+	XSPI_RegularCmdTypeDef sCommand ={ 0 };
+
+	// Step 1: Page Data Read (0x13) - セルからバッファへ転送
+	if(NAND_Command(NAND_CMD_PAGE_READ, page_addr) != HAL_OK) return HAL_ERROR;
+
+	// Step 2: BUSY 完了待ち
+	if (NAND_WaitBusy() != HAL_OK) return HAL_ERROR;
+
+	// Step 3: Fast Read (0x0B) - バッファから MCU へデータ読み出し
+	// 0xEB is 1-4-4
+	memset(&sCommand, 0, sizeof(sCommand));
+	sCommand.Instruction = NAND_CMD_READ_BUFFER_QUAD_OUTPUT; // 0x6B
+	sCommand.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
+	sCommand.Address = column_addr;
+	sCommand.AddressMode = HAL_XSPI_ADDRESS_1_LINE;
+	sCommand.AddressWidth = HAL_XSPI_ADDRESS_16_BITS;
+	sCommand.DummyCycles = (g_isContinuousMode)? 16: 8; // 8 dummy cycles. for non-buffer mode it requires 32 cycles.
 	sCommand.DataMode = HAL_XSPI_DATA_4_LINES;
 	sCommand.DataLength = size;
 
-	if (HAL_XSPI_Command(&hxspi2, &sCommand, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) return HAL_ERROR;
-	return HAL_XSPI_Receive(&hxspi2, pData, HAL_XSPI_TIMEOUT_DEFAULT_VALUE);
+	return NAND_RunReceive(&sCommand, pData);
 }
 
 #define NAND_REG_CONFIG       0xB0  // Status Register 2 (Configuration)
 #define NAND_CFG_BUF_MASK     (1 << 3) // Bit 3: BUF (1: Buffer Mode, 0: Continuous Read)
 
-// Continuous Read モードの有効化 (BUF=0)
-HAL_StatusTypeDef NAND_EnableContinuousRead(void)
+// Continuous Read モードの設定
+HAL_StatusTypeDef NAND_EnableContinuousRead(uint8_t enable)
 {
 	uint8_t status_reg2 = 0;
-	if(NAND_ReadRegister(NAND_REG_CONFIG, &status_reg2) != HAL_OK) return HAL_ERROR; //
+	if(NAND_ReadRegister(NAND_REG_CONFIG, &status_reg2) != HAL_OK) return HAL_ERROR;
 
-	// BUF ビットを 0 にクリア
-	status_reg2 &= ~NAND_CFG_BUF_MASK;
+	if(enable)
+	{
+		// BUF ビットを 0 にクリア (Continuous Read Mode)
+		status_reg2 &= ~NAND_CFG_BUF_MASK;
+		g_isContinuousMode = 1;
+	}
+	else
+	{
+		// BUF ビットを 1 にセット (Buffer Mode)
+		status_reg2 |=  NAND_CFG_BUF_MASK;
+		g_isContinuousMode = 0;
+	}
 
 	// Status Register-2 に書き戻し (0x1F コマンドを使用)
-	return NAND_WriteRegister(NAND_REG_CONFIG, status_reg2); //
+	return NAND_WriteRegister(NAND_REG_CONFIG, status_reg2);
 }
 
+// 1: continuous mode, 0: buffer mode
+int NAND_IsContinuousReadMode()
+{
+	uint8_t status_reg2 = 0;
+	if(NAND_ReadRegister(NAND_REG_CONFIG, &status_reg2) != HAL_OK) return -1;
 
+	if(status_reg2 & NAND_CFG_BUF_MASK)
+	{
+		g_isContinuousMode = 0;
+		return 0; // BUF=1
+	}
+	else
+	{
+		g_isContinuousMode = 1;
+		return 1; // BUF=0
+	}
+}
 
 //
 
@@ -188,8 +347,27 @@ HAL_StatusTypeDef NAND_WritePage(uint32_t page_addr, uint16_t column_addr, const
 	sCommand.DataMode = HAL_XSPI_DATA_4_LINES;           // データ転送は Quad (4 線)
 	sCommand.DataLength = size;
 
+
+#if NAND_ACCESS_MODE_DMA
+	if (HAL_XSPI_Command(&hxspi2, &sCommand, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) return HAL_ERROR;
+
+	g_isTransactionBusy = 1;
+	if(HAL_XSPI_Transmit_DMA(&hxspi2, (uint8_t *)pData) != HAL_OK) return HAL_ERROR;
+	if(NAND_XSPI_WaitForComplete() < 0) return HAL_ERROR; // wait for complete
+
+	return HAL_OK;
+#elif NAND_ACCESS_MODE_INTERRUPT
+	if (HAL_XSPI_Command(&hxspi2, &sCommand, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) return HAL_ERROR;
+
+	g_isTransactionBusy = 1;
+	if(HAL_XSPI_Transmit_IT(&hxspi2, (uint8_t *)pData) != HAL_OK) return HAL_ERROR;
+	if(NAND_XSPI_WaitForComplete() < 0) return HAL_ERROR; // wait for complete
+
+	return HAL_OK;
+#else
 	if (HAL_XSPI_Command(&hxspi2, &sCommand, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) return HAL_ERROR;
 	if (HAL_XSPI_Transmit(&hxspi2, (uint8_t *)pData, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) return HAL_ERROR;
+#endif
 
 	// Step 3: Program Execute (0x10) - データバッファから NAND セルへ書き込み実行
 	if(NAND_Command(NAND_CMD_PROGRAM_EXECUTE, page_addr) != HAL_OK) return HAL_ERROR;
@@ -212,8 +390,6 @@ HAL_StatusTypeDef NAND_WritePage(uint32_t page_addr, uint16_t column_addr, const
 // Note: address is page address, not block address
 HAL_StatusTypeDef NAND_EraseBlock(uint32_t page_addr)
 {
-	XSPI_RegularCmdTypeDef sCommand = { 0 };
-
 	// Step 1: Write Enable (WEL=1 に設定)
 	if (NAND_WriteEnable() != HAL_OK) return HAL_ERROR;
 
