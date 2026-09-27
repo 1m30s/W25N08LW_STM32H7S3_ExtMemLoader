@@ -9,8 +9,8 @@
 #define INC_W25N08_DRIVER_H_
 
 // DMA, Polling or Interrupt
-#define NAND_ACCESS_MODE_DMA 1
-#define NAND_ACCESS_MODE_INTERRUPT 1
+#define NAND_ACCESS_MODE_DMA 0
+#define NAND_ACCESS_MODE_INTERRUPT 0
 // when both 0, polling mode used
 
 // NAND Flash Parameter for W25N08LW

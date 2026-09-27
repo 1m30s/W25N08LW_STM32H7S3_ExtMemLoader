@@ -47,7 +47,7 @@ KeepInCompilation uint64_t Verify (uint32_t MemoryAddr, uint32_t RAMBufferAddr, 
 KeepInCompilation uint32_t MassErase (uint32_t Parallelism );
 
 // USER ADD
-KeepInCompilation uint32_t Read(uint32_t Address, uint32_t Size, uint8_t *Buffer);
+KeepInCompilation uint32_t Read(uint32_t Address, uint32_t Size, uint8_t *buffer);
 
 /**
   * @}

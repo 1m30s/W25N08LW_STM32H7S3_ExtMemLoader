@@ -138,49 +138,39 @@
 			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/STM32_ExtMem_Loader/core/systick_management.c</locationURI>
 		</link>
 		<link>
-			<name>Middlewares/ST/STM32_ExtMem_Manager/stm32_custom_driver.c</name>
-			<type>1</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/STM32_ExtMem_Manager/custom/stm32_custom_driver.c</locationURI>
+			<name>Middlewares/ST/STM32_ExtMem_Manager/boot</name>
+			<type>2</type>
+			<locationURI>virtual:/virtual</locationURI>
+		</link>
+		<link>
+			<name>Middlewares/ST/STM32_ExtMem_Manager/custom</name>
+			<type>2</type>
+			<locationURI>virtual:/virtual</locationURI>
+		</link>
+		<link>
+			<name>Middlewares/ST/STM32_ExtMem_Manager/sal</name>
+			<type>2</type>
+			<locationURI>virtual:/virtual</locationURI>
 		</link>
 		<link>
 			<name>Middlewares/ST/STM32_ExtMem_Manager/stm32_extmem.c</name>
 			<type>1</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/STM32_ExtMem_Manager/stm32_extmem.c</locationURI>
+			<locationURI>PARENT-3-PROJECT_LOC/NAND_Flash_Board_FW/NAND_Flash_Board/Middlewares/ST/STM32_ExtMem_Manager/stm32_extmem.c</locationURI>
 		</link>
 		<link>
-			<name>Middlewares/ST/STM32_ExtMem_Manager/stm32_psram_driver.c</name>
+			<name>Middlewares/ST/STM32_ExtMem_Manager/boot/stm32_boot_lrun.c</name>
 			<type>1</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/STM32_ExtMem_Manager/psram/stm32_psram_driver.c</locationURI>
+			<locationURI>PARENT-3-PROJECT_LOC/NAND_Flash_Board_FW/NAND_Flash_Board/Middlewares/ST/STM32_ExtMem_Manager/boot/stm32_boot_lrun.c</locationURI>
 		</link>
 		<link>
-			<name>Middlewares/ST/STM32_ExtMem_Manager/stm32_sal_sd.c</name>
+			<name>Middlewares/ST/STM32_ExtMem_Manager/custom/stm32_custom_driver.c</name>
 			<type>1</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/STM32_ExtMem_Manager/sal/stm32_sal_sd.c</locationURI>
+			<locationURI>PARENT-3-PROJECT_LOC/NAND_Flash_Board_FW/NAND_Flash_Board/Middlewares/ST/STM32_ExtMem_Manager/custom/stm32_custom_driver.c</locationURI>
 		</link>
 		<link>
-			<name>Middlewares/ST/STM32_ExtMem_Manager/stm32_sal_xspi.c</name>
+			<name>Middlewares/ST/STM32_ExtMem_Manager/sal/stm32_sal_xspi.c</name>
 			<type>1</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/STM32_ExtMem_Manager/sal/stm32_sal_xspi.c</locationURI>
-		</link>
-		<link>
-			<name>Middlewares/ST/STM32_ExtMem_Manager/stm32_sdcard_driver.c</name>
-			<type>1</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/STM32_ExtMem_Manager/sdcard/stm32_sdcard_driver.c</locationURI>
-		</link>
-		<link>
-			<name>Middlewares/ST/STM32_ExtMem_Manager/stm32_sfdp_data.c</name>
-			<type>1</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/STM32_ExtMem_Manager/nor_sfdp/stm32_sfdp_data.c</locationURI>
-		</link>
-		<link>
-			<name>Middlewares/ST/STM32_ExtMem_Manager/stm32_sfdp_driver.c</name>
-			<type>1</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/STM32_ExtMem_Manager/nor_sfdp/stm32_sfdp_driver.c</locationURI>
-		</link>
-		<link>
-			<name>Middlewares/ST/STM32_ExtMem_Manager/stm32_user_driver.c</name>
-			<type>1</type>
-			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/STM32_ExtMem_Manager/user/stm32_user_driver.c</locationURI>
+			<locationURI>PARENT-3-PROJECT_LOC/NAND_Flash_Board_FW/NAND_Flash_Board/Middlewares/ST/STM32_ExtMem_Manager/sal/stm32_sal_xspi.c</locationURI>
 		</link>
 	</linkedResources>
 </projectDescription>

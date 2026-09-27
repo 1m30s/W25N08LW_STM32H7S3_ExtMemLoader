@@ -67,10 +67,10 @@ void MX_EXTMEM_MANAGER_Init(void)
   /* Initialization of the memory parameters */
   memset(extmem_list_config, 0x0, sizeof(extmem_list_config));
 
-  /* EXTMEMORY_2 */
+  /* EXTMEMORY_1 */
   extmem_list_config[0].MemType = EXTMEM_USER;
 
-  EXTMEM_Init(EXTMEMORY_2, 0);
+  EXTMEM_Init(EXTMEMORY_1, 0);
 
   /* USER CODE BEGIN MX_EXTMEM_Init_PostTreatment */
 

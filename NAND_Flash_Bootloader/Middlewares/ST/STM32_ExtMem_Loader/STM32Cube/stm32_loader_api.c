@@ -88,7 +88,9 @@ typedef enum {
   DEBUG_STATE_INIT,
   DEBUG_STATE_WRITE,
   DEBUG_STATE_SECTORERASE,
-  DEBUG_STATE_MASSERASE
+  DEBUG_STATE_MASSERASE,
+
+  DEBUG_STATE_READ // USER ADD
 } DEBUG_STATETypedef;
 
 /**
@@ -249,6 +251,13 @@ int main(void)
       exec = DEBUG_STATE_INIT;
       break;
     }
+
+    // Add read function here to export the function
+    case DEBUG_STATE_READ :{
+      Read(Address, Size, (uint8_t *)Buff_address);
+      exec = DEBUG_STATE_INIT;
+      break;
+    }
     }
 
   } while (condition);
@@ -308,6 +317,11 @@ uint32_t Init(void)
 
   MemoryMappedMode = MEM_MAPENABLE;
 
+  // Disable continuous read mode
+  NAND_EnableContinuousRead(0);
+
+
+  // debug
   if(1)
   {
 	#define NAND_REG_PROTECTION         0xA0  // Status Register-1 (Protection)
@@ -340,9 +354,13 @@ uint32_t Init(void)
 	// Load memory from NAND Flash
 	// (Extmem manager has already initialized)
 
-  // How long it takes? for example, when data rate is 100MHz x 4bit (QSPI), to read 64MB it takes
+  // How long it takes? for example, when data rate is 100MHz x 4bit (QSPI), to read 64MB it takes at least
   // 64MB / 50MB/s = 1.3 sec
 
+  // Note: loader_init is timed out after 5 seconds. Read process must be finished during this duration
+  // -> removed and just use the added Read function
+
+  /*
 	uint32_t i;
 	//static uint8_t buf[STM32EXTLOADER_DEVICE_PAGE_SIZE]; // data buffer
 	for(i=0; i<STM32EXTLOADER_DEVICE_SIZE/STM32EXTLOADER_DEVICE_PAGE_SIZE; i+=1)
@@ -367,6 +385,7 @@ uint32_t Init(void)
 
 		//break;
 	}
+  */
 
 
   return retr;
@@ -402,6 +421,8 @@ KeepInCompilation uint32_t Write(uint32_t Address, uint32_t Size, uint8_t *buffe
 //    return 0;
 //  }
 
+	int ret = 1;
+
 	// 1. Write PSRAM
 	uint32_t i;
 	uint32_t* buffer32 = (uint32_t*) buffer;
@@ -412,16 +433,72 @@ KeepInCompilation uint32_t Write(uint32_t Address, uint32_t Size, uint8_t *buffe
 	}
 
 	// 2. Write NAND Flash
+	// Remove address offset
+	Address &= 0x0FFFFFFF;
 
-  return 1;
+	NAND_WriteRegister(0xA0, 0x04); // Disable Write Protect
+	// (SR1 BP[3:0] = 0b0000, TB=1 -> All Unlocked)
+
+	uint32_t writelen = 0, curPos = 0;
+	while(curPos < Size)
+	{
+		uint32_t page_addr = (Address + curPos) / NAND_PAGE_SIZE;
+		uint32_t column_addr = (Address + curPos) - page_addr * NAND_PAGE_SIZE;
+
+		writelen = NAND_PAGE_SIZE - column_addr;
+		if(Size - curPos < NAND_PAGE_SIZE) writelen = Size - curPos;
+
+		if(NAND_WritePage(page_addr, column_addr, &buffer[curPos], writelen) != HAL_OK)
+		{
+			ret = 0; // returns 0 (error)
+			break;
+		}
+		sprintf(buf, "- NAND_WritePage(%Xh,%Xh,%d)\n", page_addr, column_addr, writelen);
+		STM32_EXTMEMLOADER_TRACE(buf);
+
+		curPos += writelen;
+	}
+	NAND_WriteRegister(0xA0, 0x7C); // Enable Write Protect
+	// (SR1 BP[3:0] = 0b1111, TB=1 -> All Locked)
+
+  return ret;
 }
 
 // USER ADD
-KeepInCompilation uint32_t Read(uint32_t Address, uint32_t Size, uint8_t *Buffer)
+// Read function via API
+KeepInCompilation uint32_t Read(uint32_t Address, uint32_t Size, uint8_t *buffer)
 {
-	STM32_EXTMEMLOADER_TRACE("\n\nCall Function Read\n");
+	char buf[128];
+	sprintf(buf, "Call Function Read(%Xh,%d,%Xh)\n", Address, Size, (uint32_t)buffer);
+	STM32_EXTMEMLOADER_TRACE(buf);
 
-	return 1;
+	int ret = 1; // OK
+	// Remove address offset
+	Address &= 0x0FFFFFFF;
+
+	uint32_t readlen = 0, curPos = 0;
+	while(curPos < Size)
+	{
+		// Requires NAND Flash is set as buffer read mode
+		uint32_t page_addr = (Address + curPos) / NAND_PAGE_SIZE;
+		uint32_t column_addr = (Address + curPos) - page_addr * NAND_PAGE_SIZE;
+
+		readlen = NAND_PAGE_SIZE - column_addr;
+		if(Size - curPos < NAND_PAGE_SIZE) readlen = Size - curPos;
+
+		if(NAND_ReadPage(page_addr, column_addr, &buffer[curPos], readlen) != HAL_OK)
+		{
+			ret = 0; // returns 0 (error)
+			break;
+		}
+
+		sprintf(buf, "- NAND_ReadPage(%Xh,%Xh,%d)\n", page_addr, column_addr, readlen);
+		STM32_EXTMEMLOADER_TRACE(buf);
+
+		curPos += readlen;
+	}
+
+	return ret;
 }
 
 /**
@@ -448,7 +525,7 @@ KeepInCompilation uint32_t MassErase(uint32_t Parallelism)
 //    return 0;
 //  }
 
-  return 1;
+  return SectorErase(0, NAND_ROM_SIZE); // Execute SectorErase
 }
 
 /**
@@ -490,12 +567,31 @@ KeepInCompilation uint32_t SectorErase(uint32_t EraseStartAddress, uint32_t Eras
 			  (STM32EXTLOADER_DEVICE_INITIAL_CONTENT << 24);
   }
 
-  // 2. Erase NAND Flash
-  for(i=EraseStartAddress; i<=EraseEndAddress; i+=STM32EXTLOADER_DEVICE_SECTOR_SIZE)
-  {
-  }
+	NAND_WriteRegister(0xA0, 0x04); // Disable Write Protect
+	// (SR1 BP[3:0] = 0b0000, TB=1 -> All Unlocked)
 
-  return 1;
+	int ret = 1;
+	uint32_t addr;
+	// 2. Erase NAND Flash
+	for(addr=EraseStartAddress; addr<=EraseEndAddress; addr+=STM32EXTLOADER_DEVICE_SECTOR_SIZE) // address is increment by sector size
+	{
+		// Remove address offset
+		uint32_t blockAddress = (addr & 0x0FFFFFFF) / NAND_PAGE_SIZE; // get page address
+		// Execute once per block
+		if(NAND_EraseBlock(blockAddress) != HAL_OK)
+		{
+			ret = 0; // returns 0 (error)
+			break;
+		}
+
+		sprintf(buf, "- NAND_EraseBlock(%Xh)\n", blockAddress);
+		STM32_EXTMEMLOADER_TRACE(buf);
+	}
+
+	NAND_WriteRegister(0xA0, 0x7C); // Enable Write Protect
+	// (SR1 BP[3:0] = 0b1111, TB=1 -> All Locked)
+
+  return ret;
 }
 
 /**
@@ -520,7 +616,9 @@ KeepInCompilation uint64_t Verify (uint32_t MemoryAddr, uint32_t RAMBufferAddr, 
   uint32_t size = Size*4;
   uint64_t checksum;
 
-  STM32_EXTMEMLOADER_TRACE("\n\nCall Function Verify\n");
+	char buf[128];
+	sprintf(buf, "\n\nCall Function Verify(%X,%X,%d,%d)\n", MemoryAddr, RAMBufferAddr, Size, Missalignement);
+	STM32_EXTMEMLOADER_TRACE(buf);
 
   /* Enable memory mapped mode if disabled */
 //  if (MemoryMappedMode == MEM_MAPDISABLE)
