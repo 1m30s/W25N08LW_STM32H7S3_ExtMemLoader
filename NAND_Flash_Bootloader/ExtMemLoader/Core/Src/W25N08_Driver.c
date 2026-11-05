@@ -5,6 +5,7 @@
  *      Author: Hiroyuki Yamada (Y-Logic)
  */
 
+//#include "main.h"
 #include "extmem_manager.h"
 #include "W25N08_Driver.h"
 #include <string.h>
@@ -174,6 +175,8 @@ static HAL_StatusTypeDef NAND_RunReceive(XSPI_RegularCmdTypeDef* pCommand, uint8
 	g_isTransactionBusy = 1;
 	if(HAL_XSPI_Receive_DMA(&hxspi2, pData) != HAL_OK) return HAL_ERROR;
 	if(NAND_XSPI_WaitForComplete() < 0) return HAL_ERROR; // wait for complete
+
+	//
 
 	return HAL_OK;
 #elif NAND_ACCESS_MODE_INTERRUPT
@@ -453,29 +456,19 @@ void NAND_ScanBadBlocks(void)
 }
 #define NAND_CMD_WRITE_LUT  0xA1 // Swap Blocks
 #define NAND_CMD_READ_LUT   0xA5 // Read BBM LUT
-
 // BBM LUT に Bad Block 置換ペアを登録
 HAL_StatusTypeDef NAND_WriteBBM_LUT(uint16_t bad_lba, uint16_t good_pba)
 {
 	if (bad_lba == good_pba) return HAL_ERROR; // 同一LBAは指定不可
-
-	// 2-die 構成の Block Group 同一判定チェック
-	uint8_t lba_group = (bad_lba >= 2048) ? 1 : 0;
-	uint8_t pba_group = (good_pba >= 2048) ? 1 : 0;
-	if (lba_group != pba_group) return HAL_ERROR; // 異なるダイ間での置換は仕様違反
+	// 2die 構成の Block Group 同一判定チェック
+	if ( (bad_lba & 0x8000) != (good_pba & 0x8000) ) return HAL_ERROR; // 異なるダイ間での置換は仕様違反
 
 	// Write Enable (0x06) 発行
 	NAND_WriteEnable();
 
 	XSPI_RegularCmdTypeDef sCommand = { 0 };
-	uint8_t lut_data[4];
-
-	// LBA と PBA を 16-bit ビッグエンディアンで設定
-	lut_data[0] = (bad_lba >> 8) & 0xFF;  // LBA [15:8]
-	lut_data[1] = bad_lba & 0xFF;         // LBA [7:0]
-	lut_data[2] = (good_pba >> 8) & 0xFF; // PBA [15:8]
-	lut_data[3] = good_pba & 0xFF;        // PBA [7:0]
-
+	// LBA と PBA を 16bit ビッグエンディアンで設定
+	uint8_t lut_data[4] = {bad_lba >> 8, bad_lba, good_pba>>8, good_pba};
 	sCommand.Instruction = NAND_CMD_WRITE_LUT;
 	sCommand.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
 	sCommand.DataMode = HAL_XSPI_DATA_1_LINE;
@@ -484,18 +477,20 @@ HAL_StatusTypeDef NAND_WriteBBM_LUT(uint16_t bad_lba, uint16_t good_pba)
 	if (HAL_XSPI_Command(&hxspi2, &sCommand, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) return HAL_ERROR;
 	if (HAL_XSPI_Transmit(&hxspi2, lut_data, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) return HAL_ERROR;
 
-	return NAND_WaitBusy();
+	return NAND_WaitBusy(); // 書き込み完了待ち
 }
-
 // 内蔵 LUT テーブル（全エントリ）の取得
-HAL_StatusTypeDef NAND_ReadBBM_LUT(uint16_t *pLbaBuffer, uint16_t *pPbaBuffer, uint8_t max_entries)
+HAL_StatusTypeDef NAND_ReadBBM_LUT(uint16_t *pLbaBuffer, uint16_t *pPbaBuffer,
+		uint8_t max_entries, uint8_t bankGroup)
 {
 	XSPI_RegularCmdTypeDef sCommand = { 0 };
 	uint8_t raw_lut[160]; // 最大 40 entries x 4 bytes = 160 bytes
 
 	sCommand.Instruction = NAND_CMD_READ_LUT;
 	sCommand.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
-	sCommand.DummyCycles = 8; // 8 dummy clocks
+	sCommand.Address = (bankGroup << 6); // Bank group + Dummy clock を 8ビットアドレスとして送信
+	sCommand.AddressMode = HAL_XSPI_ADDRESS_1_LINE;
+	sCommand.AddressWidth = HAL_XSPI_ADDRESS_8_BITS;
 	sCommand.DataMode = HAL_XSPI_DATA_1_LINE;
 	sCommand.DataLength = max_entries * 4;
 

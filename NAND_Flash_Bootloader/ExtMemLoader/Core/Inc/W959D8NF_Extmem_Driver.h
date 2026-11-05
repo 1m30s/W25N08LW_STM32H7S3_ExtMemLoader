@@ -4,6 +4,7 @@
  *  Created on: 2026/08/30
  *      Author: Hiroyuki Yamada (Y-Logic)
  *
+ *  Extmem Device Definition File
  *  This file is modified from stm32_W959D8NF.h, which is derived from
  *  stm32-mw-extmem-mgr v1.6.0
  *  https://github.com/STMicroelectronics/stm32-mw-extmem-mgr
@@ -47,7 +48,7 @@
 		.RegisterConfig[1].RWConfigStep.RegisterValue          = EXTMEM_W959D8NF_CMD1_VALUE_CFGR,       /*!< Value of the register */ \
 		.RegisterConfig[1].RWConfigStep.RegisterMask           = EXTMEM_W959D8NF_CMD1_MASK_CFGR,        /*!< Mask for the register */ \
 	   .RegisterConfig[2].ConfigStepType                      = EXTMEM_CUSTOM_CFGSTEP_EXEC_OPT_CFG,    /*!< Config step to use new Optional configuration */ \
-	   .OptionalConfig.Frequency                              = 100000000,                             /*!< *Operating frequency in Hz (100MHz)*/ \
+	   .OptionalConfig.Frequency                              = 200000000,                             /*!< *Operating frequency in Hz (200MHz)*/ \
 	   .HyperRamConfig.HyperbusConfig.RwRecoveryTimeCycle     = 7,                                     /*!< *Read/Write recovery time cycle */ \
 	   .HyperRamConfig.HyperbusConfig.AccessTimeCycle         = 7,                                     /*!< *Access time cycle */ \
 	   .HyperRamConfig.HyperbusConfig.WriteZeroLatency        = EXTMEM_CUSTOM_WR_LATENCY_ON,           /*!< Write zero latency */ \

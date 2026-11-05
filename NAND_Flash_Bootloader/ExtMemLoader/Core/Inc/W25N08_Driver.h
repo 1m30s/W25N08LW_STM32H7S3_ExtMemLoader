@@ -58,7 +58,7 @@ void NAND_ScanBadBlocks();
 HAL_StatusTypeDef NAND_WriteBBM_LUT(uint16_t bad_lba, uint16_t good_pba);
 
 // 内蔵 LUT テーブル（全エントリ）の取得
-HAL_StatusTypeDef NAND_ReadBBM_LUT(uint16_t *pLbaBuffer, uint16_t *pPbaBuffer, uint8_t max_entries);
+HAL_StatusTypeDef NAND_ReadBBM_LUT(uint16_t *pLbaBuffer, uint16_t *pPbaBuffer, uint8_t max_entries, uint8_t bankGroup);
 
 typedef enum {
     NAND_ECC_OK                  = 0,

@@ -138,11 +138,6 @@
 			<locationURI>PARENT-1-PROJECT_LOC/Middlewares/ST/STM32_ExtMem_Loader/core/systick_management.c</locationURI>
 		</link>
 		<link>
-			<name>Middlewares/ST/STM32_ExtMem_Manager/boot</name>
-			<type>2</type>
-			<locationURI>virtual:/virtual</locationURI>
-		</link>
-		<link>
 			<name>Middlewares/ST/STM32_ExtMem_Manager/custom</name>
 			<type>2</type>
 			<locationURI>virtual:/virtual</locationURI>
@@ -156,11 +151,6 @@
 			<name>Middlewares/ST/STM32_ExtMem_Manager/stm32_extmem.c</name>
 			<type>1</type>
 			<locationURI>PARENT-3-PROJECT_LOC/NAND_Flash_Board_FW/NAND_Flash_Board/Middlewares/ST/STM32_ExtMem_Manager/stm32_extmem.c</locationURI>
-		</link>
-		<link>
-			<name>Middlewares/ST/STM32_ExtMem_Manager/boot/stm32_boot_lrun.c</name>
-			<type>1</type>
-			<locationURI>PARENT-3-PROJECT_LOC/NAND_Flash_Board_FW/NAND_Flash_Board/Middlewares/ST/STM32_ExtMem_Manager/boot/stm32_boot_lrun.c</locationURI>
 		</link>
 		<link>
 			<name>Middlewares/ST/STM32_ExtMem_Manager/custom/stm32_custom_driver.c</name>

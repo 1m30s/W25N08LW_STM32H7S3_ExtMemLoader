@@ -322,7 +322,7 @@ uint32_t Init(void)
 
 
   // debug
-  if(1)
+  if(0)
   {
 	#define NAND_REG_PROTECTION         0xA0  // Status Register-1 (Protection)
 	#define NAND_REG_CONFIG             0xB0  // Status Register-2 (Configuration)
@@ -349,6 +349,41 @@ uint32_t Init(void)
 	{
 		STM32_EXTMEMLOADER_TRACE("Error: NAND_ReadRegister() Failed.\n");
 	}
+  }
+  // debug 2
+  if(1)
+  {
+	  // check LBA/PBA
+
+		uint16_t lba[40], pba[40];
+		if(NAND_ReadBBM_LUT(lba, pba, 40, 0) == HAL_OK)
+		{
+			printf("List of LBA, PBA of Bank Group 0\n");
+			for(int i=0; i<40; i++)
+			{
+				if((lba[i]&0x8000) == 0) break;
+				printf("LUT%d: %04X, %04X\n", i, lba[i], pba[i]);
+			}
+		}
+		else
+		{
+			printf("Error\n");
+		}
+
+		if(NAND_ReadBBM_LUT(lba, pba, 40, 1) == HAL_OK)
+		{
+			printf("List of LBA, PBA in Bank Group 1\n");
+			for(int i=0; i<40; i++)
+			{
+				if((lba[i]&0x8000) == 0) break;
+				printf("LUT%d: %04X, %04X\n", i, lba[i], pba[i]);
+			}
+		}
+		else
+		{
+			printf("Error\n");
+		}
+
   }
 
 	// Load memory from NAND Flash
@@ -402,7 +437,7 @@ uint32_t Init(void)
 KeepInCompilation uint32_t Write(uint32_t Address, uint32_t Size, uint8_t *buffer)
 {
 	char buf[128];
-	sprintf(buf, "Call Function Write(%Xh,%d,%Xh)\n", Address, Size, (uint32_t)buffer);
+	sprintf(buf, "Call Function Write(%lXh,%ld,%lXh)\n", Address, Size, (uint32_t)buffer);
 	STM32_EXTMEMLOADER_TRACE(buf);
   //STM32_EXTMEMLOADER_TRACE("\n\nCall Function Write\n");
 
@@ -443,17 +478,22 @@ KeepInCompilation uint32_t Write(uint32_t Address, uint32_t Size, uint8_t *buffe
 	while(curPos < Size)
 	{
 		uint32_t page_addr = (Address + curPos) / NAND_PAGE_SIZE;
-		uint32_t column_addr = (Address + curPos) - page_addr * NAND_PAGE_SIZE;
+		uint32_t column_addr = (Address + curPos) - page_addr * NAND_PAGE_SIZE; // start column address
 
+		// Calculate write length
+		// - Write size must not exceed page size (NAND_PAGE_SIZE)
+		// - Write range of one function call must be within one page
+		// [26/11/05] bugfix: not to exceed page edge
 		writelen = NAND_PAGE_SIZE - column_addr;
 		if(Size - curPos < NAND_PAGE_SIZE) writelen = Size - curPos;
+		if(column_addr + writelen > NAND_PAGE_SIZE) writelen = NAND_PAGE_SIZE - column_addr;
 
 		if(NAND_WritePage(page_addr, column_addr, &buffer[curPos], writelen) != HAL_OK)
 		{
 			ret = 0; // returns 0 (error)
 			break;
 		}
-		sprintf(buf, "- NAND_WritePage(%Xh,%Xh,%d)\n", page_addr, column_addr, writelen);
+		sprintf(buf, "- NAND_WritePage(%lXh,%lXh,%ld)\n", page_addr, column_addr, writelen);
 		STM32_EXTMEMLOADER_TRACE(buf);
 
 		curPos += writelen;
@@ -469,7 +509,7 @@ KeepInCompilation uint32_t Write(uint32_t Address, uint32_t Size, uint8_t *buffe
 KeepInCompilation uint32_t Read(uint32_t Address, uint32_t Size, uint8_t *buffer)
 {
 	char buf[128];
-	sprintf(buf, "Call Function Read(%Xh,%d,%Xh)\n", Address, Size, (uint32_t)buffer);
+	sprintf(buf, "Call Function Read(%lXh,%ld,%lXh)\n", Address, Size, (uint32_t)buffer);
 	STM32_EXTMEMLOADER_TRACE(buf);
 
 	int ret = 1; // OK
@@ -488,11 +528,13 @@ KeepInCompilation uint32_t Read(uint32_t Address, uint32_t Size, uint8_t *buffer
 
 		if(NAND_ReadPage(page_addr, column_addr, &buffer[curPos], readlen) != HAL_OK)
 		{
+			sprintf(buf, "- NAND_ReadPage(%lXh,%lXh,%ld) -> Error\n", page_addr, column_addr, readlen);
+			STM32_EXTMEMLOADER_TRACE(buf);
 			ret = 0; // returns 0 (error)
 			break;
 		}
 
-		sprintf(buf, "- NAND_ReadPage(%Xh,%Xh,%d)\n", page_addr, column_addr, readlen);
+		sprintf(buf, "- NAND_ReadPage(%lXh,%lXh,%ld)\n", page_addr, column_addr, readlen);
 		STM32_EXTMEMLOADER_TRACE(buf);
 
 		curPos += readlen;
@@ -537,7 +579,7 @@ KeepInCompilation uint32_t MassErase(uint32_t Parallelism)
 KeepInCompilation uint32_t SectorErase(uint32_t EraseStartAddress, uint32_t EraseEndAddress)
 {
 	char buf[128];
-	sprintf(buf, "\n\nCall Function SectorErase(%X,%X)\n", EraseStartAddress, EraseEndAddress);
+	sprintf(buf, "\n\nCall Function SectorErase(%lX,%lX)\n", EraseStartAddress, EraseEndAddress);
 	STM32_EXTMEMLOADER_TRACE(buf);
   /* Disable memory mapped mode if enabled */
 //  if (MemoryMappedMode == MEM_MAPENABLE)
@@ -584,7 +626,7 @@ KeepInCompilation uint32_t SectorErase(uint32_t EraseStartAddress, uint32_t Eras
 			break;
 		}
 
-		sprintf(buf, "- NAND_EraseBlock(%Xh)\n", blockAddress);
+		sprintf(buf, "- NAND_EraseBlock(%lXh)\n", blockAddress);
 		STM32_EXTMEMLOADER_TRACE(buf);
 	}
 
@@ -617,7 +659,7 @@ KeepInCompilation uint64_t Verify (uint32_t MemoryAddr, uint32_t RAMBufferAddr, 
   uint64_t checksum;
 
 	char buf[128];
-	sprintf(buf, "\n\nCall Function Verify(%X,%X,%d,%d)\n", MemoryAddr, RAMBufferAddr, Size, Missalignement);
+	sprintf(buf, "\n\nCall Function Verify(%lX,%lX,%ld,%ld)\n", MemoryAddr, RAMBufferAddr, Size, Missalignement);
 	STM32_EXTMEMLOADER_TRACE(buf);
 
   /* Enable memory mapped mode if disabled */
