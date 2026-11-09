@@ -1,4 +1,4 @@
-# ExtMemLoader Project for Serial Memory Board [YLB-6115-A]
+# ExtMemLoader Project for W25N08LW+W959D8NF+STM32H7S3 Serial Memory Board [YLB-6115-A]
 
 (c) 2026 H.Yamada (Y-Logic)
 
