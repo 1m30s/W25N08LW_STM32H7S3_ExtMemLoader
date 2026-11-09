@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-	<name>NAND_Flash_Bootloader_ExtMemLoader</name>
+	<name>NAND_Flash_W25N08LW_W959D8NF_STM32H7S3_ExtMemLoader</name>
 	<comment></comment>
 	<projects>
 	</projects>
