@@ -74,8 +74,16 @@ STM32 のメモリ空間のうち、0x9000_0000 から 0x9400_0000 までの 64M
 
 なお、内蔵 Flash ROM (BootFlash) などの 0x9000_0000- 以外へのアクセスは、ExtMemLoader ではなく通常の SWD ローダが動作します。
 
-## NAND Flash に格納するプログラムの作り方
+## NAND Flash に格納するプログラムの作り方 (STM32CubeIDE)
 
-STM32CubeMX で生成したプロジェクトの場合、Application プロジェクトにはいくつかのリンカスクリプトが生成されると思います。このうち、プロジェクト設定から`STM32H7C3L8HX_ROMxspi1.ld`を使用すると、プログラムの配置先が XSPI1 (0x9000_0000-) になったバイナリが生成されます。 このほか MPU を使用する場合、この領域に命令実行権限を与えることに注意してください。
+STM32H7S3 で NAND Flash にプログラムを格納して実行するには、Bootloader プロジェクトと Application プロジェクトの対応が必要です。
+
+Bootloader は、外部メモリから RAM にプログラムを転送して、プログラムカウンタをそこにジャンプする動作が必要です。今回の場合、PSRAM のメモリマップ初期化と、NAND Flash から PSRAM にプログラムを転送して、そこにジャンプします。Bootloader の作り方はここでは省略します。
+
+Application は、STM32CubeMX で生成したプロジェクトの場合、Application プロジェクトにはいくつかのリンカスクリプトが生成されると思います。プロジェクト構成から`STM32H7C3L8HX_ROMxspi1.ld`を使用します。通常通りビルドすれば、プログラムの配置先が XSPI1 (0x9000_0000-) になったバイナリ (.elf) が生成されます。 
 
 ![](README_img/2026-11-09-15-06-12-image.png)
+
+あとは、STM32CubeProgrammer か STM32CubeIDE を使って外部 NAND Flash に書き込みます。
+
+このほか MPU を使用する場合、この領域に命令実行権限を与えることに注意してください。
