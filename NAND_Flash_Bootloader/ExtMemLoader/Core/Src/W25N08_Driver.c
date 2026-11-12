@@ -28,6 +28,7 @@ static volatile uint8_t g_isTransactionBusy = 0;
 #define NAND_CMD_READ_STATUS_REG    0x0F  // Read Status / Configuration Register
 #define NAND_CMD_WRITE_STATUS_REG   0x1F  // Write Status / Configuration Register (0x01も可)
 #define NAND_CMD_WRITE_ENABLE       0x06  // Write Enable (WEL=1)
+#define NAND_CMD_WRITE_DISABLE      0x04  // Write Disable (WEL=0)
 
 // レジスタアドレス定義
 #define NAND_REG_PROTECTION         0xA0  // Status Register-1 (Protection)
@@ -126,6 +127,20 @@ HAL_StatusTypeDef NAND_WriteEnable(void)
 
     sCommand.OperationType   = HAL_XSPI_OPTYPE_COMMON_CFG;
     sCommand.Instruction     = NAND_CMD_WRITE_ENABLE;      // 0x06
+    sCommand.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
+    sCommand.AddressMode     = HAL_XSPI_ADDRESS_NONE;      // アドレスなし
+    sCommand.DataMode        = HAL_XSPI_DATA_NONE;         // データ転送なし
+
+	if(NAND_XSPI_WaitForComplete() < 0) return HAL_ERROR; // timed out
+    return HAL_XSPI_Command(&hxspi2, &sCommand, HAL_XSPI_TIMEOUT_DEFAULT_VALUE);
+}
+
+HAL_StatusTypeDef NAND_WriteDisable(void)
+{
+    XSPI_RegularCmdTypeDef sCommand = {0};
+
+    sCommand.OperationType   = HAL_XSPI_OPTYPE_COMMON_CFG;
+    sCommand.Instruction     = NAND_CMD_WRITE_DISABLE;      // 0x04
     sCommand.InstructionMode = HAL_XSPI_INSTRUCTION_1_LINE;
     sCommand.AddressMode     = HAL_XSPI_ADDRESS_NONE;      // アドレスなし
     sCommand.DataMode        = HAL_XSPI_DATA_NONE;         // データ転送なし
@@ -358,7 +373,6 @@ HAL_StatusTypeDef NAND_WritePage(uint32_t page_addr, uint16_t column_addr, const
 	if(HAL_XSPI_Transmit_DMA(&hxspi2, (uint8_t *)pData) != HAL_OK) return HAL_ERROR;
 	if(NAND_XSPI_WaitForComplete() < 0) return HAL_ERROR; // wait for complete
 
-	return HAL_OK;
 #elif NAND_ACCESS_MODE_INTERRUPT
 	if (HAL_XSPI_Command(&hxspi2, &sCommand, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) return HAL_ERROR;
 
@@ -366,7 +380,6 @@ HAL_StatusTypeDef NAND_WritePage(uint32_t page_addr, uint16_t column_addr, const
 	if(HAL_XSPI_Transmit_IT(&hxspi2, (uint8_t *)pData) != HAL_OK) return HAL_ERROR;
 	if(NAND_XSPI_WaitForComplete() < 0) return HAL_ERROR; // wait for complete
 
-	return HAL_OK;
 #else
 	if (HAL_XSPI_Command(&hxspi2, &sCommand, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) return HAL_ERROR;
 	if (HAL_XSPI_Transmit(&hxspi2, (uint8_t *)pData, HAL_XSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) return HAL_ERROR;
@@ -421,19 +434,15 @@ NAND_ECC_StatusTypeDef NAND_CheckECC_Status(void)
     uint8_t ecc_bits = (sr1 >> 4) & 0x03; // Bit 5:4 (ECC1, ECC0)
     return (NAND_ECC_StatusTypeDef) ecc_bits;
 }
-#define NAND_TOTAL_BLOCKS   4096 // 8Gb = 4096 ブロック (2 dies x 2048)
-#define NAND_PAGES_PER_BLOCK 64  // 1ブロック = 64ページ
-
-static uint8_t g_BadBlockTable[NAND_TOTAL_BLOCKS / 8]; // RAM上にビットマップ形式で保持
 
 // Returns 1 if block is bad
 int NAND_IsBlockBad(uint16_t block_addr)
 {
 	uint8_t spare_buf[4];
-	uint32_t page_addr = (uint32_t) block_addr * NAND_PAGES_PER_BLOCK;
+	uint32_t page_addr = (uint32_t) block_addr * NAND_BLOCK_SIZE;
 
-	// Page 0 の Main 先頭(Column 0) または Spare 先頭(Column 4096) を読み出す
-	NAND_ReadPage(page_addr, 4096, spare_buf, 2); // Spare 先頭チェック
+	// Page 0 の Spare 先頭(offset 4096) を読み出す
+	NAND_ReadPage(page_addr, 4096, spare_buf, 4); // Spare 先頭チェック
 
 	if (spare_buf[0] != 0xFF)
 	{
@@ -442,18 +451,6 @@ int NAND_IsBlockBad(uint16_t block_addr)
 	return 0; // Good Block
 }
 
-void NAND_ScanBadBlocks(void)
-{
-	memset(g_BadBlockTable, 0, sizeof(g_BadBlockTable));
-
-	for (uint16_t blk = 0; blk < NAND_TOTAL_BLOCKS; blk++)
-	{
-		if (NAND_IsBlockBad(blk))
-		{
-			g_BadBlockTable[blk / 8] |= (1 << (blk % 8)); // Bad Block ビットを立てる
-		}
-	}
-}
 #define NAND_CMD_WRITE_LUT  0xA1 // Swap Blocks
 #define NAND_CMD_READ_LUT   0xA5 // Read BBM LUT
 // BBM LUT に Bad Block 置換ペアを登録
