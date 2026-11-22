@@ -1,4 +1,4 @@
-# ExtMemLoader Project for W25N08LW+W959D8NF+STM32H7S3 Serial Memory Board [YLB-6115-A]
+# ExtMemLoader Project for W25N08LW+W959D8NF+STM32H7S3 Serial Memory Board
 
 (c) 2026 H.Yamada (Y-Logic)
 
@@ -6,21 +6,23 @@
 
 このプロジェクトは、シリアル NAND Flash 搭載基板 [YLB-6115-A / z-nand-stm32h7-1] の外部メモリへの書き込みを行う ExtMemLoader プロジェクトです。
 
+![](README_img/2026-11-22-20-03-57-image.png)
+
 ![](README_img/2026-11-09-13-13-13-image.png)
 
 上図に本基板のブロック図を示します。本基板は STM32 マイコン STM32H7S3L8H6 と Quad SPI の 1GB NAND Flash ROM、HYPERBUS による 64MB PSRAM を実装しています。STM32H7S3 は BootFlash シリーズの STM32 マイコンであり、MCU 上にブートローダ格納向けの小容量 (64kB)  Flash ROM しか搭載していません。このため、アプリケーションコードのバイナリやそのほかのデータは外部 NAND Flash に格納することになります。
 
 NAND Flash への書き込みや Verify は既製のブートローダでは対応していないため、ユーザ側で実装する必要があります。このプロジェクトでは、STM32Cube の ExtMemLoader と呼ばれる仕組みにより、STM32CubeProgrammer や STM32CubeIDE から NAND Flash への書き込み方法を提供します。
 
-## 外部メモリとの接続
+## ファイル一覧
 
-STM32H7S3L8H6 は 2 つの XSPI モジュールを持ちます。XSPI と外部メモリの接続は下記の通りです。
+`NAND_Flash_W25N08LW_W959D8NF_STM32H7S3_ExtMemLoader.stldr`: ローダのバイナリ（UART 出力なし）
 
-XSPI1 -> HYPERBUS (1.8V) -> PSRAM (W959D8NFYA5I)
+`NAND_Flash_W25N08LW_W959D8NF_STM32H7S3_ExtMemLoader_debug.stldr`: ローダのバイナリ（UART 出力付き）
 
-XSPI2 -> Quad SPI (1.8V) -> NAND Flash (W25N08LWTBIG)
+`NAND_Flash_Bootloader`: STM32CubeIDE Project
 
-XSPIの機能により、 XSPI1 に接続された PSRAM はメモリマップモードで使用することが可能です。XSPI は NAND Flash のメモリマップに対応ていないので、XSPI2 に接続された NAND Flash は、コマンドモード（インダイレクトモード）でのみ動作します。
+---
 
 ## ExtMemLoader の使い方
 
@@ -32,33 +34,49 @@ ExtMemLoader は STM32 のメモリ上で動作するバイナリであり、STM
 
 STM32CubeProgrammer のパスを適当に設定したうえでビルドすると、ビルド後スクリプトによりSTM32CubeProgrammer に ExtMemLoader がインストールされます。**Windows の場合は、ビルド時に CubeIDE を管理者として実行する**必要があります。
 
-手動でインストールする場合は、ビルドされた`.elf`ファイルの拡張子を `.stldr` に変更して、STM32CubeProgrammer の ExtLoader パス
+### 手動でインストールする場合
 
- `C:\Program Files\STMicroelectronics\STM32Cube\STM32CubeProgrammer\bin\ExternalLoader` 
+手動でインストールする場合は、ビルドされた`.elf`ファイルの拡張子を `.stldr` に変更して、STM32CubeProgrammer の ExtLoader パスと STM32CubeIDE の ExtLoader パスにコピーします。
 
-と STM32CubeIDE の ExtLoader パス
+前者は STM32CubeProgrammer が `C:\Program Files\STMicroelectronics\STM32Cube\STM32CubeProgrammer` にインストールされている場合、
 
-`(STM32CubeIDE)\plugins\com.st.stm32cube.ide.mcu.externaltools.cubeprogrammer.win32_2.2.400.202601091506\tools\bin\ExternalLoader`
+`C:\Program Files\STMicroelectronics\STM32Cube\STM32CubeProgrammer\bin\ExternalLoader`
 
-にコピーしてください。
+です。
 
-### 事前準備
+後者は例えば STM32CubeIDE が `C:\ST\STM32CubeIDE_2.1.1\STM32CubeIDE`にインストールされている場合、
+
+`C:\ST\STM32CubeIDE_2.1.1\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.cubeprogrammer.win32_2.2.400.202601091506\tools\bin\ExternalLoader`
+
+のようになります。(パスは環境によって変わります)
+
+### 実行前の事前準備
 
 ![](README_img/2026-11-09-14-43-20-image.png)
 
 あらかじめ STM32CubeProgrammer からマイコンの OPTION Bytes のうち XSPI1_HSLV, XSPI2_HSLV を有効にしてください。**これらが無効になっていると、書き込みやベリファイに失敗します。**
 
-### STM32CubeProgrammer で使う場合
+### STM32CubeProgrammer の使い方
 
 ![](README_img/2026-11-09-15-03-43-image.png)
 
 External Loaders 画面から、`NAND_Flash_W25N08LW_W959D8NF_STM32H7S3_ExtMemLoader.stldr` の Select にチェックを入れて有効にします。
 
-### STM32CubeIDE で使う場合
+### STM32CubeIDE の使い方
 
 ![](README_img/2026-11-09-15-03-07-image.png)
 
-Run Configurations から、 External loaders に `NAND_Flash_W25N08LW_W959D8NF_STM32H7S3_ExtMemLoader.stldr`を指定します。通常の Run/Debug で、0x9000_0000 の書き込みに対して、この ExtMemLoader が使われます。
+`Run Configurations` から、 External loaders に `NAND_Flash_W25N08LW_W959D8NF_STM32H7S3_ExtMemLoader.stldr`を指定します。通常の Run/Debug で、0x9000_0000 の書き込みに対して、この ExtMemLoader が使われます。
+
+## 外部メモリとの接続
+
+STM32H7S3L8H6 は 2 つの XSPI モジュールを持ちます。このプロジェクトの想定する XSPI と外部メモリの接続は下記の通りです。
+
+`XSPI1 -> HYPERBUS (1.8V) -> PSRAM (W959D8NFYA5I)`
+
+`XSPI2 -> Quad SPI (1.8V) -> NAND Flash (W25N08LWTBIG)`
+
+XSPIの機能により、 XSPI1 に接続された PSRAM はメモリマップモードで使用することが可能です。XSPI は NAND Flash のメモリマップに対応ていないので、XSPI2 に接続された NAND Flash は、コマンドモード（インダイレクトモード）でのみ動作します。
 
 ## メモリ空間
 

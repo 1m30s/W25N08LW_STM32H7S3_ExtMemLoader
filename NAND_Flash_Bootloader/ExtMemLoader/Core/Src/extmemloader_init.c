@@ -77,7 +77,9 @@ static void SystemClock_Config(void);
 // Printf support
 int __io_putchar(int ch)
 {
+#ifdef DEBUG
   HAL_UART_Transmit(&huart3, (uint8_t *) &ch, 1, 10);
+#endif
   return ch;
 }
 /* USER CODE END 0 */

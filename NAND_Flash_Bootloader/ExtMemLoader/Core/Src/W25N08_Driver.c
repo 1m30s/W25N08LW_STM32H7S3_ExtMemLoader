@@ -5,7 +5,6 @@
  *      Author: Hiroyuki Yamada (Y-Logic)
  */
 
-//#include "main.h"
 #include "extmem_manager.h"
 #include "W25N08_Driver.h"
 #include <string.h>
@@ -78,6 +77,13 @@ static int NAND_XSPI_WaitForComplete()
 ///////////////////////////////////////////////////////////////////
 // Driver Functions
 ///////////////////////////////////////////////////////////////////
+
+#if NAND_CALL_DIAGNOSIS_LOG_ENABLE
+struct sNandDiag{
+uint32_t writeCallCnt, readCallCnt, copyCallCnt, eraseCallCnt;
+uint32_t writeByteCnt, readByteCnt;
+} g_nandDiag;
+#endif
 
 // NAND Flash Register 読み出し
 HAL_StatusTypeDef NAND_ReadRegister(uint8_t reg_addr, uint8_t* reg_val)
@@ -233,7 +239,26 @@ HAL_StatusTypeDef NAND_ReadPage(uint32_t page_addr, uint16_t column_addr, uint8_
 	sCommand.DataMode = HAL_XSPI_DATA_4_LINES;
 	sCommand.DataLength = size;
 
-	return NAND_RunReceive(&sCommand, pData);
+	if (NAND_RunReceive(&sCommand, pData) != HAL_OK) return HAL_ERROR;
+
+	// Step 4: 読み込み結果のチェック (ECC-1, ECC-2 確認) -> NAND_CheckECC_Status() で明示的に読み出すこと
+//	uint8_t sr3 = 0;
+//	if(NAND_ReadRegister(NAND_REG_STATUS_3, &sr3) != HAL_OK) return HAL_ERROR;
+//	if ( sr3 & NAND_STATUS_ECC_MASK )
+//	{
+//		if ( ((sr3 & NAND_STATUS_ECC_MASK) == NAND_STATUS_ECC_NOT_CORRECTED) )
+//		{
+//			printerr("ECC error detected in page %d.\n", page_addr);
+//			return NAND_RESULT_ECC_ERROR; // ECC Error
+//		}
+//	}
+
+#if NAND_CALL_DIAGNOSIS_LOG_ENABLE
+	g_nandDiag.readCallCnt ++;
+	g_nandDiag.readByteCnt += size;
+#endif
+
+	return HAL_OK;
 }
 
 
@@ -260,6 +285,10 @@ HAL_StatusTypeDef NAND_ReadPage_SingleIO(uint32_t page_addr, uint16_t column_add
 	sCommand.DataMode = HAL_XSPI_DATA_1_LINE;
 	sCommand.DataLength = size;
 
+#if NAND_CALL_DIAGNOSIS_LOG_ENABLE
+	g_nandDiag.readCallCnt ++;
+	g_nandDiag.readByteCnt += size;
+#endif
 	return NAND_RunReceive(&sCommand, pData);
 }
 
@@ -286,6 +315,10 @@ HAL_StatusTypeDef NAND_ReadPage_QuadOutput(uint32_t page_addr, uint16_t column_a
 	sCommand.DataMode = HAL_XSPI_DATA_4_LINES;
 	sCommand.DataLength = size;
 
+#if NAND_CALL_DIAGNOSIS_LOG_ENABLE
+	g_nandDiag.readCallCnt ++;
+	g_nandDiag.readByteCnt += size;
+#endif
 	return NAND_RunReceive(&sCommand, pData);
 }
 
@@ -354,7 +387,9 @@ HAL_StatusTypeDef NAND_WritePage(uint32_t page_addr, uint16_t column_addr, const
 	XSPI_RegularCmdTypeDef sCommand = { 0 };
 
 	// Step 1: Write Enable (WEL=1 に設定)
+#if NAND_INSERT_WRITE_ENABLE
 	if (NAND_WriteEnable() != HAL_OK) return HAL_ERROR;
+#endif
 
 	// Step 2: Quad Load Program Data (0x32) - MCU からデータバッファへデータ送信
 	sCommand.Instruction = NAND_CMD_QUAD_LOAD_PROGRAM;
@@ -394,23 +429,30 @@ HAL_StatusTypeDef NAND_WritePage(uint32_t page_addr, uint16_t column_addr, const
 	// Step 5: 書き込み結果のチェック (P-FAIL ビット確認)
 	uint8_t sr3 = 0;
 	if(NAND_ReadRegister(NAND_REG_STATUS_3, &sr3) != HAL_OK) return HAL_ERROR;
-	if (sr3 & NAND_STATUS_P_FAIL || ((sr3 & NAND_STATUS_ECC_MASK) == NAND_STATUS_ECC_NOT_CORRECTED))
+//	if (sr3 & NAND_STATUS_P_FAIL || ((sr3 & NAND_STATUS_ECC_MASK) == NAND_STATUS_ECC_NOT_CORRECTED))
+	// -> ECC_MASK is updated in read operation, not write operation.
+	if (sr3 & NAND_STATUS_P_FAIL )
 	{
 		return HAL_ERROR; // 書き込みエラー (バッドブロック処理等のトリガー)
 	}
 
+#if NAND_CALL_DIAGNOSIS_LOG_ENABLE
+	g_nandDiag.writeCallCnt ++;
+	g_nandDiag.writeByteCnt += size;
+#endif
 	return HAL_OK;
 }
 
 // ブロック消去
-// Note: address is page address, not block address
-HAL_StatusTypeDef NAND_EraseBlock(uint32_t page_addr)
+HAL_StatusTypeDef NAND_EraseBlock(uint32_t block_addr)
 {
 	// Step 1: Write Enable (WEL=1 に設定)
+#if NAND_INSERT_WRITE_ENABLE
 	if (NAND_WriteEnable() != HAL_OK) return HAL_ERROR;
+#endif
 
 	// Step 2: Block Erase (0xD8) コマンド発行
-	if(NAND_Command(NAND_CMD_BLOCK_ERASE, page_addr) != HAL_OK) return HAL_ERROR;
+	if(NAND_Command(NAND_CMD_BLOCK_ERASE, block_addr) != HAL_OK) return HAL_ERROR;
 
 	// Step 3: BUSY 完了待ち (消去処理の完了監視)
 	if (NAND_WaitBusy() != HAL_OK) return HAL_ERROR;
@@ -420,9 +462,12 @@ HAL_StatusTypeDef NAND_EraseBlock(uint32_t page_addr)
 	if(NAND_ReadRegister(NAND_REG_STATUS_3, &sr3) != HAL_OK) return HAL_ERROR;
 	if (sr3 & NAND_STATUS_E_FAIL)
 	{
-		return HAL_ERROR; // 消去エラー (バッドブロック処理等のトリガー)
+		return HAL_ERROR; // 消去エラー
 	}
 
+#if NAND_CALL_DIAGNOSIS_LOG_ENABLE
+	g_nandDiag.eraseCallCnt ++;
+#endif
 	return HAL_OK;
 }
 
@@ -435,16 +480,16 @@ NAND_ECC_StatusTypeDef NAND_CheckECC_Status(void)
     return (NAND_ECC_StatusTypeDef) ecc_bits;
 }
 
+static uint8_t g_spare_buf[8] __attribute__((aligned(8)));
 // Returns 1 if block is bad
 int NAND_IsBlockBad(uint16_t block_addr)
 {
-	uint8_t spare_buf[4];
 	uint32_t page_addr = (uint32_t) block_addr * NAND_BLOCK_SIZE;
 
 	// Page 0 の Spare 先頭(offset 4096) を読み出す
-	NAND_ReadPage(page_addr, 4096, spare_buf, 4); // Spare 先頭チェック
+	NAND_ReadPage(page_addr, 4096, g_spare_buf, 4); // Spare 先頭チェック
 
-	if (spare_buf[0] != 0xFF)
+	if (g_spare_buf[0] != 0xFF)
 	{
 		return 1; // Bad Block
 	}
@@ -461,7 +506,9 @@ HAL_StatusTypeDef NAND_WriteBBM_LUT(uint16_t bad_lba, uint16_t good_pba)
 	if ( (bad_lba & 0x8000) != (good_pba & 0x8000) ) return HAL_ERROR; // 異なるダイ間での置換は仕様違反
 
 	// Write Enable (0x06) 発行
+#if NAND_INSERT_WRITE_ENABLE
 	NAND_WriteEnable();
+#endif
 
 	XSPI_RegularCmdTypeDef sCommand = { 0 };
 	// LBA と PBA を 16bit ビッグエンディアンで設定
@@ -501,3 +548,63 @@ HAL_StatusTypeDef NAND_ReadBBM_LUT(uint16_t *pLbaBuffer, uint16_t *pPbaBuffer,
 	}
 	return HAL_OK;
 }
+
+
+// データ読み込みなしでページコピー
+HAL_StatusTypeDef NAND_CopyPage(uint32_t page_addr_src, uint32_t page_addr_dst)
+{
+
+	// Step 1: Page Data Read (0x13) - セルからバッファへ転送
+	if (NAND_Command(NAND_CMD_PAGE_READ, page_addr_src) != HAL_OK) return HAL_ERROR;
+
+	// Step 2: BUSY 完了待ち
+	if (NAND_WaitBusy() != HAL_OK) return HAL_ERROR;
+
+	// Step 3: Write Enable (WEL=1 に設定)
+#if NAND_INSERT_WRITE_ENABLE
+	if (NAND_WriteEnable() != HAL_OK) return HAL_ERROR;
+#endif
+
+	// Step 4: Program Execute (0x10) - データバッファから NAND セルへ書き込み実行
+	if(NAND_Command(NAND_CMD_PROGRAM_EXECUTE, page_addr_dst) != HAL_OK) return HAL_ERROR;
+
+	// Step 5: BUSY 完了待ち (内部書き込み動作の完了監視)
+	if (NAND_WaitBusy() != HAL_OK) return HAL_ERROR;
+
+	// Step 6: 書き込み結果のチェック (P-FAIL ビット確認)
+	uint8_t sr3 = 0;
+	if(NAND_ReadRegister(NAND_REG_STATUS_3, &sr3) != HAL_OK) return HAL_ERROR;
+//	if (sr3 & NAND_STATUS_P_FAIL || ((sr3 & NAND_STATUS_ECC_MASK) == NAND_STATUS_ECC_NOT_CORRECTED))
+	// -> ECC_MASK is updated in read operation, not write operation.
+	if (sr3 & NAND_STATUS_P_FAIL )
+	{
+		return HAL_ERROR; // 書き込みエラー
+	}
+
+#if NAND_CALL_DIAGNOSIS_LOG_ENABLE
+	g_nandDiag.copyCallCnt ++;
+#endif
+	return HAL_OK;
+}
+
+///////////////////////////////////////////////////////////////////
+// Diag Functions
+///////////////////////////////////////////////////////////////////
+
+
+#if NAND_CALL_DIAGNOSIS_LOG_ENABLE
+void NAND_ShowCallDiagnosis()
+{
+	printf("\n*NAND Call Diag*\n");
+	printf("Write Call = %lu, Total Byte Written = %lu bytes\n", g_nandDiag.writeCallCnt, g_nandDiag.writeByteCnt);
+	printf("Read Call = %lu, Total Byte Read = %lu bytes\n", g_nandDiag.readCallCnt, g_nandDiag.readByteCnt);
+	printf("Erase Call = %lu\n", g_nandDiag.eraseCallCnt);
+	printf("Copy Call = %lu, Total Copy = %lu bytes\n", g_nandDiag.copyCallCnt, g_nandDiag.copyCallCnt*(4096+256));
+	printf("\n\n");
+}
+void NAND_ResetCallDiagnosis()
+{
+	memset(&g_nandDiag, 0, sizeof(g_nandDiag));
+}
+#endif
+

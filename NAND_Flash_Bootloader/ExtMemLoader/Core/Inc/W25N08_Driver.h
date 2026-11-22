@@ -10,10 +10,27 @@
 
 #include <stdint.h>
 
+// Insert write enable before write and erase operation
+#ifndef NAND_INSERT_WRITE_ENABLE
+#define NAND_INSERT_WRITE_ENABLE 1
+#endif
+
+// Call diagnosis log
+#define NAND_CALL_DIAGNOSIS_LOG_ENABLE 0
+
 // DMA, Polling or Interrupt
+#ifndef NAND_ACCESS_MODE_DMA
 #define NAND_ACCESS_MODE_DMA 0
+#endif
+#ifndef NAND_ACCESS_MODE_INTERRUPT
 #define NAND_ACCESS_MODE_INTERRUPT 0
+#endif
 // when both 0, polling mode used
+
+// Return value (returns HAL_OK if okay)
+#define NAND_RESULT_ECC_ERROR				0x82
+#define NAND_RESULT_ECC_DETECTED			0x81
+#define NAND_RESULT_ECC_EXCEED_THRESHOLD	0x83
 
 // NAND Flash Parameter for W25N08LW
 
@@ -62,6 +79,8 @@ HAL_StatusTypeDef NAND_WriteRegister(uint8_t reg_addr, uint8_t reg_val);
 // Set new value to write protect
 #define NAND_SetWriteProtect(val) NAND_WriteRegister (0xA0, val); // Disable Write Protect
 
+// Set or reset flag of write enable
+// Note: Write enable turns to disable state every time when page write or erase operated.
 HAL_StatusTypeDef NAND_WriteEnable();
 HAL_StatusTypeDef NAND_WriteDisable();
 // BUSY 解除待ち
@@ -105,9 +124,19 @@ NAND_ECC_StatusTypeDef NAND_CheckECC_Status(void);
 
 
 // ブロック消去
-HAL_StatusTypeDef NAND_EraseBlock(uint32_t page_addr);
+// - block_addr: block address by 4k block
+HAL_StatusTypeDef NAND_EraseBlock(uint32_t block_addr);
 
 // ページライト
 HAL_StatusTypeDef NAND_WritePage(uint32_t page_addr, uint16_t column_addr, const uint8_t *pData, uint16_t size);
+
+// データ読み込みなしでページコピー
+HAL_StatusTypeDef NAND_CopyPage(uint32_t page_addr_src, uint32_t page_addr_dst);
+
+
+#if NAND_CALL_DIAGNOSIS_LOG_ENABLE
+void NAND_ShowCallDiagnosis();
+void NAND_ResetCallDiagnosis();
+#endif
 
 #endif /* INC_W25N08_DRIVER_H_ */
